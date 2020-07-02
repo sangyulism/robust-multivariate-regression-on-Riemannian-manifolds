@@ -1,4 +1,4 @@
-function [p, V, E, Y_hat, gnorm, gradp_list] = mglm_sphere(X, Y, varargin)
+function [p, V, E, Y_hat, gnorm] = mglm_sphere_huber(X, Y, varargin)
 %MGLM_SPHERE performs MGLM on the unit sphere by interative method.
 %
 %   [p, V, E, Y_hat, gnorm] = MGLM_SPHERE(X, Y)
@@ -20,7 +20,6 @@ function [p, V, E, Y_hat, gnorm, gradp_list] = mglm_sphere(X, Y, varargin)
 
 %   Hyunwoo J. Kim
 %   $Revision: 0.1 $  $Date: 2014/06/23 17:27:37 $
-
     
     ndimY = size(Y,1);
     [ndimX ndata] = size(X);
@@ -32,13 +31,19 @@ function [p, V, E, Y_hat, gnorm, gradp_list] = mglm_sphere(X, Y, varargin)
     Yu = U'*logY; %logY is represented by U,Yu = L*X
     L = Yu/Xc; % LXc = Yu, 이거 항상 있음?
     V = U*L;
-    % %% zeros
+    % % zeros
     % V = zeros(ndimY,ndimX); % Random initialization
-    
+
     V = proj_TpM(p,V); % To get the valid tangent vectors.
-    
+
     if nargin >=3
-        maxiter = varargin{1};
+        huber_delta = varargin{1};
+    else
+        huber_delta = 1.345;
+    end
+    
+    if nargin >=4
+        maxiter = varargin{2};
     else
         maxiter = 5000;
     end
@@ -52,19 +57,19 @@ function [p, V, E, Y_hat, gnorm, gradp_list] = mglm_sphere(X, Y, varargin)
 
     E = [];
     gnorm = [];
-    gradp_list = [];
     E = [E; feval_sphere(p,V,X,Y)];
     step = c1;
     for niter=1:maxiter
         Y_hat = prediction_sphere(p,V,X);
         J = logmap_vecs_sphere(Y_hat,Y);
         err_TpM = paralleltranslateAtoB_sphere(Y_hat, p, J);
-        gradp = -sum(err_TpM,2);
+        err_TpM_huber = huber(err_TpM, huber_delta);
+        gradp = -sum(err_TpM_huber,2);
         
         % v projection on to tanget space
         gradV = zeros(size(V));
         for iV = 1:size(V,2)
-            gradV(:,iV) = -err_TpM*X(iV,:)';
+            gradV(:,iV) = -err_TpM_huber*X(iV,:)';
         end
         gnorm_new = norm([gradV gradp]);
         
@@ -85,7 +90,6 @@ function [p, V, E, Y_hat, gnorm, gradp_list] = mglm_sphere(X, Y, varargin)
                 V = V_new;
                 E = [E; E_new];
                 gnorm = [gnorm; gnorm_new];
-                gradp_list = [gradp_list; gradp];
                 moved = 1;
                 step = min(step*2,1);
                 break
@@ -120,4 +124,42 @@ function [gradp, gradV] = safeguard(gradp, gradV, c2)
     end
     
 end
-    
+
+%%huber
+% 여기서 계산은 단순히 vector의 norm이 huber_delta 이상이면, 상수로 나옴.
+function J_return = huber(J,huber_delta)
+    J_return = zeros(size(J,1), size(J,2));
+    err = zeros(size(J,2),1);
+    for i = 1:size(J,2)
+        err(i) = norm(J(:,i));
+    end
+    a = sort(err);
+    cutoff = err(round(0.8*size(a,1)));
+    for i = 1:size(J,2)
+        Ji = J(:,i);
+        if err(i) > cutoff
+            Ji = Ji/norm(Ji) * cutoff;
+        end
+        J_return(:,i) = Ji;
+    end
+end
+
+% 저 차원에서는 밑의 코드로
+% function J_return = huber(J,huber_delta)
+%     J_return = zeros(size(J,1), size(J,2));
+%     err = zeros(size(J,2),1);
+%     for i = 1:size(J,2)
+%         err(i) = norm(J(:,i));
+%     end
+%     a = sort(err);
+%     tmp = 1./sin(a).^13;
+%     a = a(cumsum(tmp) <= sum(tmp)/2);
+%     s = a(size(a,1))/0.6745;
+%     for i = 1:size(J,2)
+%         Ji = J(:,i);
+%         if err(i) > huber_delta * s
+%             Ji = Ji/norm(Ji) * huber_delta * s;
+%         end
+%         J_return(:,i) = Ji;
+%     end
+% end

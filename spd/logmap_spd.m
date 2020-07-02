@@ -16,8 +16,8 @@ if norm(P-X) < 1e-18
     return
 end
 
-[U D] = eig(P);
-g = U*sqrt(D);
+[U D] = eig(P); % U 는 각 열벡터가 P의 eigen vector, D는 각 값이 eigen value 인 diagonal matrix, P가 spd 이므로 P = UDU' (UU'=U'U=I),D의 각 원소는 양수
+g = U*sqrt(D); % P=gg'
 invg = inv(g);
 y = invg*X*invg';
 [V S] = eig(y);

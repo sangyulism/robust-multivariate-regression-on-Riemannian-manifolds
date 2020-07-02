@@ -13,6 +13,7 @@ function w_new = paralleltranslateAtoB_spd(a, b, w)
 %   Hyunwoo J. Kim
 %   $Revision: 0.1 $  $Date: 2014/06/23 17:06:21 $
 
+    % size(a,3) 혹은 size(b,3) 은 둘이 같거나 둘 중 하나가 1
     if size(a,3) < size(b,3)
         a = repmat(a, [1 1 size(b,3)]);
     elseif size(a,3) > size(b,3)
@@ -22,10 +23,12 @@ function w_new = paralleltranslateAtoB_spd(a, b, w)
     if size(b,3) ~= size(w,3)
         % a, b are fixed
         % This changes only w.
+        % 이 경우는 a,b 점 하나인 경우
         fixab = 1;
         P1 = a;
         P2 = b;
     else
+        % 이 경우는 a,b,w 가 size(a,3)(=size(b,3)=size(w,3))쌍 있는 경우
         fixab = 0;
     end
 

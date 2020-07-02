@@ -1,4 +1,4 @@
-function [p, V, E, Y_hat, gnorm, gradp_list] = mglm_sphere(X, Y, varargin)
+function [p, V, E, Y_hat, gnorm] = mglm_sphere_l1(X, Y, varargin)
 %MGLM_SPHERE performs MGLM on the unit sphere by interative method.
 %
 %   [p, V, E, Y_hat, gnorm] = MGLM_SPHERE(X, Y)
@@ -32,7 +32,7 @@ function [p, V, E, Y_hat, gnorm, gradp_list] = mglm_sphere(X, Y, varargin)
     Yu = U'*logY; %logY is represented by U,Yu = L*X
     L = Yu/Xc; % LXc = Yu, 이거 항상 있음?
     V = U*L;
-    % %% zeros
+    % % zeros
     % V = zeros(ndimY,ndimX); % Random initialization
     
     V = proj_TpM(p,V); % To get the valid tangent vectors.
@@ -52,19 +52,19 @@ function [p, V, E, Y_hat, gnorm, gradp_list] = mglm_sphere(X, Y, varargin)
 
     E = [];
     gnorm = [];
-    gradp_list = [];
     E = [E; feval_sphere(p,V,X,Y)];
     step = c1;
     for niter=1:maxiter
         Y_hat = prediction_sphere(p,V,X);
         J = logmap_vecs_sphere(Y_hat,Y);
         err_TpM = paralleltranslateAtoB_sphere(Y_hat, p, J);
-        gradp = -sum(err_TpM,2);
+        err_TpM_l1 = l1(err_TpM);
+        gradp = -sum(err_TpM_l1,2);
         
         % v projection on to tanget space
         gradV = zeros(size(V));
         for iV = 1:size(V,2)
-            gradV(:,iV) = -err_TpM*X(iV,:)';
+            gradV(:,iV) = -err_TpM_l1*X(iV,:)';
         end
         gnorm_new = norm([gradV gradp]);
         
@@ -85,7 +85,6 @@ function [p, V, E, Y_hat, gnorm, gradp_list] = mglm_sphere(X, Y, varargin)
                 V = V_new;
                 E = [E; E_new];
                 gnorm = [gnorm; gnorm_new];
-                gradp_list = [gradp_list; gradp];
                 moved = 1;
                 step = min(step*2,1);
                 break
@@ -120,4 +119,12 @@ function [gradp, gradV] = safeguard(gradp, gradV, c2)
     end
     
 end
-    
+
+function J_return = l1(J)
+    J_return = zeros(size(J,1), size(J,2));
+    for i = 1:size(J,2)
+        Ji = J(:,i);
+        Ji = Ji/norm(Ji);
+        J_return(:,i) = Ji;
+    end
+end

@@ -3,7 +3,7 @@ function p = proj_M_spd(X,varargin)
 %
 %
 %    Example:
-%        p = PROJ_M_SPD(X)
+%        p = PROJ_M_SPD(X)s
 %
 %   p is the point on SPD manifolds.
 %   X is a n x n matrix.
@@ -16,11 +16,11 @@ function p = proj_M_spd(X,varargin)
     if nargin == 2
         c = varargin{1};
     else 
-        c = eps;
+        c = eps; % eps = 2^(-52)
     end
     
     % Make a matrix symmetric positive definite.
-    if norm(X-X') > eps
+    if norm(X-X') > eps %norm(X)는 X의 largest singular value
         X = (X+X')/2;
     end
     [V D ] = eig(X);
@@ -32,8 +32,8 @@ function p = proj_M_spd(X,varargin)
         end
     end
     % Now X is spd
-    % Make psd matrix
-    if sum(D > 0+c) < length(D)
+    % Make psd matrix (psd = positive semidefinite)
+    if sum(D > 0+c) < length(D) %D의 원소중 eps 보다 작은게 있다면, 
         a = 1e-16; 
         pnew = p;
         while ~isspd(pnew, c)

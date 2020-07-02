@@ -13,7 +13,7 @@ function w_new = paralleltranslateAtoB_sphere(a, b, w)
 %   Hyunwoo J. Kim
 %   $Revision: 0.1 $  $Date: 2014/06/23 17:06:21 $
 
-
+% size 차이가 난다면 a,b중 하나는 1개만 있음
 if size(a,2) < size(b,2)
     a = a*ones(1,size(b,2));
 elseif size(a,2) > size(b,2)

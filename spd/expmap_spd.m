@@ -11,7 +11,7 @@ function exp_p_x = expmap_spd(P,X)
 %   Hyunwoo J. Kim
 %   $Revision: 0.1 $  $Date: 2014/06/23 15:26:13 $
 
-if norm(X) < 1e-18
+    if norm(X) < 1e-18 % 이거 잘못쓴거 아님?? 내가 tab 침.
         exp_p_x = P;
         return
     end

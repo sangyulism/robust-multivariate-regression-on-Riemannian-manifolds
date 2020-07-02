@@ -9,6 +9,6 @@ function VsI = grpaction_p2i(p, Vs)
  
     %pp = inv(sqrtm(p)); % Can be optimized by evd for big matrices.
     [U,S] = eig(p);
-    pp = U*diag(1./sqrt(diag(S)))*U';
-    VsI = quadfunc(pp, Vs);
+    pp = U*diag(1./sqrt(diag(S)))*U'; %p^(-1/2)
+    VsI = quadfunc(pp, Vs); %quadfunc(p,V) 는 pVp'
 end

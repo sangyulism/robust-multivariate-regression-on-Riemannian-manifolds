@@ -1,4 +1,4 @@
-function [p, V, E, Y_hat, gnorm, Numerical_error] = mglm_spd(X, Y, varargin)
+function [p, V, E, Y_hat, gnorm, Numerical_error] = mglm_spd_l1(X, Y, varargin)
 %MGLM_SPD performs MGLM on SPD manifolds by interative method.
 %
 %   [p, V, E, Y_hat, gnorm] = MGLM_SPD(X, Y)
@@ -38,12 +38,13 @@ function [p, V, E, Y_hat, gnorm, Numerical_error] = mglm_spd(X, Y, varargin)
     V_hat = invembeddingR6_vecs(p,logYv_hat); 
     V = invembeddingR6_vecs(p,L);
     V = proj_TpM_spd(V);
-
+    
     if nargin >=3
         maxiter = varargin{1};
     else
-        maxiter = 500;
+        maxiter = 5000;
     end
+
     % Gradient Descent algorith
     % Step size
     c1 = 1;
@@ -57,16 +58,17 @@ function [p, V, E, Y_hat, gnorm, Numerical_error] = mglm_spd(X, Y, varargin)
     step = c1;
     for niter=1:maxiter
         Y_hat = prediction_spd(p,V,X);
-        J = logmap_vecs_spd(Y_hat, Y);        
+        J = logmap_vecs_spd(Y_hat, Y);
         err_TpM = paralleltranslateAtoB_spd(Y_hat, p, J);
-        gradp = -sum(err_TpM,3); % 3th axis를 따라 더함. 3*3*1 matrix가 나오게 됨
+        err_TpM_l1 = l1(err_TpM, p);
+        gradp = -sum(err_TpM_l1,3); % 3th axis를 따라 더함. 3*3*1 matrix가 나오게 됨
         
         % v projection on to tanget space
         gradV = zeros(size(V));
         
         % Matrix multiplicaton
         for iV = 1:size(V,3)
-            gradV(:,:,iV) = -weightedsum_mx(err_TpM,X(iV,:));
+            gradV(:,:,iV) = -weightedsum_mx(err_TpM_l1,X(iV,:));
         end
         
         ns = normVs(p,gradV);
@@ -77,7 +79,7 @@ function [p, V, E, Y_hat, gnorm, Numerical_error] = mglm_spd(X, Y, varargin)
 
         gnorm_new = normgradp+normgradv;
         if ~isreal(gnorm_new)
-            disp('Numerical Error LS.1');
+            disp('Numerical Error L1.1');
             Numerical_error = 1;
             %exit % 이거 원래 없는 건데, disp('Numerical Error.2')밑에서 자꾸 에러가 떠서 걍 미리 나가게..
         end
@@ -108,7 +110,7 @@ function [p, V, E, Y_hat, gnorm, Numerical_error] = mglm_spd(X, Y, varargin)
                 E = [E; E_new];
                 
                 if ~isreal(gnorm_new)
-                    disp('Numerical Error LS.2');
+                    disp('Numerical Error L1.2');
                     disp(p);
                     disp(V_new);
                     Numerical_error = 1;
@@ -158,5 +160,15 @@ function [gradp gradV] = safeguard(gradp, gradV, p, c2)
     if maxnorm > c2
         gradV = gradV*c2/maxnorm;
         gradp = gradp*c2/maxnorm;
+    end
+end
+
+% 3*3*ndata matric J 
+function J_return = l1(J,p)
+    J_return = zeros(size(J));
+    for i = 1:size(J,3)
+        Ji = J(:,:,i);
+        Ji = Ji/norm_TpM_spd(p,Ji);
+        J_return(:,:,i) = Ji;
     end
 end

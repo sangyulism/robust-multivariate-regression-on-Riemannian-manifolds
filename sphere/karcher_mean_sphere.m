@@ -24,7 +24,7 @@ end
 for iter = 1:niter
     phi = logmap_vecs_sphere(xbar,X)*W;
     xbar = expmap_sphere(xbar, phi);
-    if phi < 1e-10
+    if phi < 1e-10 %% 벡터는 자동으로 norm 씌워짐? 대소비교가능?
         break
     end
 end

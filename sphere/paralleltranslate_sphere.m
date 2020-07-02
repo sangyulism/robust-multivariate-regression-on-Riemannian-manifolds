@@ -19,7 +19,7 @@ end
 vnorm = sqrt(diag(V'*V));
 scale_factor = diag(V'*W)./vnorm.^2;
 scale_factor(isnan(scale_factor)) = 0;
-W_orth = W - V*diag(scale_factor);
+W_orth = W - V*diag(scale_factor); % w 에서 v 와 수직인 성분만 남김
 if size(p,2) == 1
     V_par = p*((-sin(vnorm)).*vnorm)' + V*diag(cos(vnorm));
 else

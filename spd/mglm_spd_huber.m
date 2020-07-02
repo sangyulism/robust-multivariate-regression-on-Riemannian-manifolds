@@ -1,4 +1,4 @@
-function [p, V, E, Y_hat, gnorm, Numerical_error] = mglm_spd(X, Y, varargin)
+function [p, V, E, Y_hat, gnorm, Numerical_error] = mglm_spd_huber(X, Y, varargin)
 %MGLM_SPD performs MGLM on SPD manifolds by interative method.
 %
 %   [p, V, E, Y_hat, gnorm] = MGLM_SPD(X, Y)
@@ -30,6 +30,7 @@ function [p, V, E, Y_hat, gnorm, Numerical_error] = mglm_spd(X, Y, varargin)
 
     % Initialization
     p = karcher_mean_spd(Y,[],500);
+    % V = zeros([ndimY ndimY ndimX]);
     logY = logmap_vecs_spd(p, Y);
     Xc = X - repmat(mean(X,2),1,ndata);
     Yv = embeddingR6_vecs(p,logY);
@@ -40,10 +41,17 @@ function [p, V, E, Y_hat, gnorm, Numerical_error] = mglm_spd(X, Y, varargin)
     V = proj_TpM_spd(V);
 
     if nargin >=3
-        maxiter = varargin{1};
+        huber_delta = varargin{1};
     else
-        maxiter = 500;
+        huber_delta = 1.345;
     end
+    
+    if nargin >=4
+        maxiter = varargin{2};
+    else
+        maxiter = 5000;
+    end
+
     % Gradient Descent algorith
     % Step size
     c1 = 1;
@@ -57,16 +65,17 @@ function [p, V, E, Y_hat, gnorm, Numerical_error] = mglm_spd(X, Y, varargin)
     step = c1;
     for niter=1:maxiter
         Y_hat = prediction_spd(p,V,X);
-        J = logmap_vecs_spd(Y_hat, Y);        
+        J = logmap_vecs_spd(Y_hat, Y);
         err_TpM = paralleltranslateAtoB_spd(Y_hat, p, J);
-        gradp = -sum(err_TpM,3); % 3th axis를 따라 더함. 3*3*1 matrix가 나오게 됨
+        err_TpM_huber = huber(err_TpM, huber_delta, p);
+        gradp = -sum(err_TpM_huber,3); % 3th axis를 따라 더함. 3*3*1 matrix가 나오게 됨
         
         % v projection on to tanget space
         gradV = zeros(size(V));
         
         % Matrix multiplicaton
         for iV = 1:size(V,3)
-            gradV(:,:,iV) = -weightedsum_mx(err_TpM,X(iV,:));
+            gradV(:,:,iV) = -weightedsum_mx(err_TpM_huber,X(iV,:));
         end
         
         ns = normVs(p,gradV);
@@ -77,7 +86,7 @@ function [p, V, E, Y_hat, gnorm, Numerical_error] = mglm_spd(X, Y, varargin)
 
         gnorm_new = normgradp+normgradv;
         if ~isreal(gnorm_new)
-            disp('Numerical Error LS.1');
+            disp('Numerical Error huber.1');
             Numerical_error = 1;
             %exit % 이거 원래 없는 건데, disp('Numerical Error.2')밑에서 자꾸 에러가 떠서 걍 미리 나가게..
         end
@@ -108,7 +117,7 @@ function [p, V, E, Y_hat, gnorm, Numerical_error] = mglm_spd(X, Y, varargin)
                 E = [E; E_new];
                 
                 if ~isreal(gnorm_new)
-                    disp('Numerical Error LS.2');
+                    disp('Numerical Error huber.2');
                     disp(p);
                     disp(V_new);
                     Numerical_error = 1;
@@ -160,3 +169,44 @@ function [gradp gradV] = safeguard(gradp, gradV, p, c2)
         gradp = gradp*c2/maxnorm;
     end
 end
+
+%%huber
+% 3*3*ndata matric J 에 대해 (즉, J는 ndata개의 3*3 sym mat 인 vector 들) huber form을 계산
+% 여기서 계산은 단순히 vector의 norm이 huber_delta 이상이면, 상수로 나옴.
+
+% quantile(0.1788) 야매
+function J_return = huber(J,huber_delta,p)
+    J_return = zeros(size(J));
+    err = zeros(size(J,3),1);
+    for i = 1:size(J,3)
+        err(i) = norm_TpM_spd(p, J(:,:,i));
+    end
+    a = sort(err);
+    cutoff = err(round(0.8212*size(a,1)));
+    for i = 1:size(J,3)
+        Ji = J(:,:,i);
+        if err(i) > cutoff
+            Ji = Ji/err(i) * cutoff;
+        end
+        J_return(:,:,i) = Ji;
+    end
+end
+
+% 좀 더 정확하게 scale 추정하는 코드 만들어야함.
+
+%이거 잘못된건데 왤캐 퍼포먼스가 좋지;
+% function J_return = huber(J,huber_delta,p)
+%     J_return = zeros(size(J));
+%     err = zeros(size(J,3),1);
+%     for i = 1:size(J,3)
+%         err(i) = norm_TpM_spd(p, J(:,:,i));
+%     end
+%     s = median(abs(err - median(err)))/0.6745;
+%     for i = 1:size(J,3)
+%         Ji = J(:,:,i);
+%         if err(i) > huber_delta * s
+%             Ji = Ji/err(i) * huber_delta * s;
+%         end
+%         J_return(:,:,i) = Ji;
+%     end
+% end
