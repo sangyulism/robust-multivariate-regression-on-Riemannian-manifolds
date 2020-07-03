@@ -1,24 +1,15 @@
-function [p, V, E, Y_hat, gnorm, Numerical_error] = mglm_spd_l1(X, Y, varargin)
-%MGLM_SPD performs MGLM on SPD manifolds by interative method.
-%
-%   [p, V, E, Y_hat, gnorm] = MGLM_SPD(X, Y)
-%   [p, V, E, Y_hat, gnorm] = MGLM_SPD(X, Y, MAXITER)
-%   has optional parameter MAXITER.  
-%
+function [p, V, E, Y_hat, gnorm, Numerical_error] = rmm_spd_L2(X, Y, varargin)
 %   The result is in p, V, E, Y_hat.
 %
-%   X is dimX x N column vectors
-%   Y is a stack of SPD matrices. 3D arrary 3x3xN.
-%   p is a base point.(spd(3)의 원소, 즉 3*3*1 matrix)
-%   V is a set of tangent vectors (3 x 3 x dimX symmetric matrix).
+%   X is npivots * ndata
+%   Y is a stack of SPD matrices. 3D arrary 3x3xndata
+%   p is a base point.
+%   V is a set of tangent vectors (3 x 3 x npivots symmetric matrix).
 %   E is the history of the sum of squared geodesic error.
 %   Y_hat is the prediction.
 %   gnorm is the history of norm of gradients.
-%
-%   See also WEIGHTEDSUM_MX, MGLM_LOGEUC_SPD
+%   Numerical_error for detecting Numerical_Error
 
-%   Hyunwoo J. Kim
-%   $Revision: 0.1 $  $Date: 2014/06/23 00:13:20 $
     Numerical_error = 0;
     ndimX = size(X,1);
     ndimY = size(Y,1);
@@ -42,10 +33,10 @@ function [p, V, E, Y_hat, gnorm, Numerical_error] = mglm_spd_l1(X, Y, varargin)
     if nargin >=3
         maxiter = varargin{1};
     else
-        maxiter = 5000;
+        maxiter = 500;
     end
 
-    % Gradient Descent algorith
+    % Gradient Descent algorithm
     % Step size
     c1 = 1;
     
@@ -54,21 +45,18 @@ function [p, V, E, Y_hat, gnorm, Numerical_error] = mglm_spd_l1(X, Y, varargin)
 
     E = [];
     gnorm = [];
-    E = [E; feval_spd(p,V,X,Y)]; %feval_spd은 error
+    E = [E; feval_spd(p,V,X,Y)];
     step = c1;
     for niter=1:maxiter
         Y_hat = prediction_spd(p,V,X);
         J = logmap_vecs_spd(Y_hat, Y);
         err_TpM = paralleltranslateAtoB_spd(Y_hat, p, J);
-        err_TpM_l1 = l1(err_TpM, p);
-        gradp = -sum(err_TpM_l1,3); % 3th axis를 따라 더함. 3*3*1 matrix가 나오게 됨
-        
-        % v projection on to tanget space
+        gradp = -sum(err_TpM,3);
         gradV = zeros(size(V));
         
         % Matrix multiplicaton
         for iV = 1:size(V,3)
-            gradV(:,:,iV) = -weightedsum_mx(err_TpM_l1,X(iV,:));
+            gradV(:,:,iV) = -weightedsum_mx(err_TpM,X(iV,:));
         end
         
         ns = normVs(p,gradV);
@@ -79,9 +67,8 @@ function [p, V, E, Y_hat, gnorm, Numerical_error] = mglm_spd_l1(X, Y, varargin)
 
         gnorm_new = normgradp+normgradv;
         if ~isreal(gnorm_new)
-            disp('Numerical Error L1.1');
+            disp('Numerical Error L2.1');
             Numerical_error = 1;
-            %exit % 이거 원래 없는 건데, disp('Numerical Error.2')밑에서 자꾸 에러가 떠서 걍 미리 나가게..
         end
 
         if Numerical_error == 1
@@ -91,7 +78,6 @@ function [p, V, E, Y_hat, gnorm, Numerical_error] = mglm_spd_l1(X, Y, varargin)
         % Safegaurd
         [gradp gradV] = safeguard(gradp, gradV, p, c2);
         
-        % 두 번째 for 문에서는 step을 1/2씩 줄여나가면서(최대 50번) Error를 줄이는 방향 찾기. 실패하면 끝냄.
         moved = 0;
         for i = 1:50
             step = step*0.5;
@@ -110,7 +96,7 @@ function [p, V, E, Y_hat, gnorm, Numerical_error] = mglm_spd_l1(X, Y, varargin)
                 E = [E; E_new];
                 
                 if ~isreal(gnorm_new)
-                    disp('Numerical Error L1.2');
+                    disp('Numerical Error L2.2');
                     disp(p);
                     disp(V_new);
                     Numerical_error = 1;
@@ -126,7 +112,7 @@ function [p, V, E, Y_hat, gnorm, Numerical_error] = mglm_spd_l1(X, Y, varargin)
         if Numerical_error == 1
             break
         end
-        if moved ~= 1 || gnorm(end) < 1e-10 % 50번해도 moved =1 안되거나, gnorm(gradiant의 norm의 합)이 충분히 작으면 끝.
+        if moved ~= 1 || gnorm(end) < 1e-10 
             break
         end
     end
@@ -141,15 +127,13 @@ function [p, V, E, Y_hat, gnorm, Numerical_error] = mglm_spd_l1(X, Y, varargin)
 end
 
 %% NormVs
-% size(V,3) * 1 벡터
 function ns = normVs(p,V)
     for i =1:size(V,3)
         ns(i,1) = norm_TpM_spd(p,V(:,:,i));
     end
 end
- 
+    
 %% Safeguard
-% gradp,gradV 각 층의 norm의 합이 c2를 넘지않도록 함
 function [gradp gradV] = safeguard(gradp, gradV, p, c2)
     ns = normVs(p,gradV);
     normgradv = sum(ns);
@@ -160,15 +144,5 @@ function [gradp gradV] = safeguard(gradp, gradV, p, c2)
     if maxnorm > c2
         gradV = gradV*c2/maxnorm;
         gradp = gradp*c2/maxnorm;
-    end
-end
-
-% 3*3*ndata matric J 
-function J_return = l1(J,p)
-    J_return = zeros(size(J));
-    for i = 1:size(J,3)
-        Ji = J(:,:,i);
-        Ji = Ji/norm_TpM_spd(p,Ji);
-        J_return(:,:,i) = Ji;
     end
 end

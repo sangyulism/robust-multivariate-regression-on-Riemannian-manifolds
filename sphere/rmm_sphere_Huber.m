@@ -1,45 +1,30 @@
-function [p, V, E, Y_hat, gnorm] = mglm_sphere_huber(X, Y, varargin)
-%MGLM_SPHERE performs MGLM on the unit sphere by interative method.
-%
-%   [p, V, E, Y_hat, gnorm] = MGLM_SPHERE(X, Y)
-%   [p, V, E, Y_hat, gnorm] = MGLM_SPHERE(X, Y, MAXITER)
-%   has optional parameter MAXITER.  
-%
+function [p, V, E, Y_hat, gnorm] = rmm_sphere_Huber(X, Y, varargin)
 %   The result is in p, V, E, Y_hat.
 %
-%   X is dimX x N column vectors
-%   Y is dimY x N column vectors (points on the unit sphere in R^dimY).
+%   X is npivots * ndata
+%   Y is dimY x ndata column vectors (points on the unit sphere in R^dimY).
 %   p is a base point.
 %   V is a set of tangent vectors (dimY x dimX).
 %   E is the history of the sum of squared geodesic error.
 %   Y_hat is the prediction.
 %   gnorm is the history of norm of gradients.
-%
-%   See also MGLM_LOGEUC_SPHERE, EXPMAP_SPHERE, FEVAL_SPHERE, PREDICTION_SPHERE,
-%   LOGMAP_VECS_SPHERE, PARALLELTRANSLATEATOB_SPHERE
-
-%   Hyunwoo J. Kim
-%   $Revision: 0.1 $  $Date: 2014/06/23 17:27:37 $
     
     ndimY = size(Y,1);
     [ndimX ndata] = size(X);
-    Xc = X - repmat(mean(X,2),1,ndata); % mean(X,2) 는 각 행벡터의 평균값을 반환한 열벡터, Xc는 중앙화 시킨 값
+    Xc = X - repmat(mean(X,2),1,ndata);
     p = karcher_mean_sphere(Y, ones(ndata,1)/ndata, 500);
 
     logY = logmap_vecs_sphere(p, Y);
-    U = null(ones(size(p,1),1)*p'); % Get orthogonal bases of TpM, null(A) 는 A의 null space의 orthonormal basis 를 열벡터로 갖는 행렬
-    Yu = U'*logY; %logY is represented by U,Yu = L*X
-    L = Yu/Xc; % LXc = Yu, 이거 항상 있음?
+    U = null(ones(size(p,1),1)*p');
+    Yu = U'*logY;
+    L = Yu/Xc;
     V = U*L;
-    % % zeros
-    % V = zeros(ndimY,ndimX); % Random initialization
-
-    V = proj_TpM(p,V); % To get the valid tangent vectors.
+    V = proj_TpM(p,V);
 
     if nargin >=3
-        huber_delta = varargin{1};
+        Huber_delta = varargin{1};
     else
-        huber_delta = 1.345;
+        Huber_delta = 0.1;
     end
     
     if nargin >=4
@@ -63,13 +48,11 @@ function [p, V, E, Y_hat, gnorm] = mglm_sphere_huber(X, Y, varargin)
         Y_hat = prediction_sphere(p,V,X);
         J = logmap_vecs_sphere(Y_hat,Y);
         err_TpM = paralleltranslateAtoB_sphere(Y_hat, p, J);
-        err_TpM_huber = huber(err_TpM, huber_delta);
-        gradp = -sum(err_TpM_huber,2);
-        
-        % v projection on to tanget space
+        err_TpM_Huber = Huber(err_TpM, Huber_delta);
+        gradp = -sum(err_TpM_Huber,2);
         gradV = zeros(size(V));
         for iV = 1:size(V,2)
-            gradV(:,iV) = -err_TpM_huber*X(iV,:)';
+            gradV(:,iV) = -err_TpM_Huber*X(iV,:)';
         end
         gnorm_new = norm([gradV gradp]);
         
@@ -125,16 +108,15 @@ function [gradp, gradV] = safeguard(gradp, gradV, c2)
     
 end
 
-%%huber
-% 여기서 계산은 단순히 vector의 norm이 huber_delta 이상이면, 상수로 나옴.
-function J_return = huber(J,huber_delta)
+%% Huber
+function J_return = Huber(J,Huber_delta)
     J_return = zeros(size(J,1), size(J,2));
     err = zeros(size(J,2),1);
     for i = 1:size(J,2)
         err(i) = norm(J(:,i));
     end
     a = sort(err);
-    cutoff = err(round(0.8*size(a,1)));
+    cutoff = err(round((1-Huber_delta)*size(a,1)));
     for i = 1:size(J,2)
         Ji = J(:,i);
         if err(i) > cutoff
@@ -143,23 +125,3 @@ function J_return = huber(J,huber_delta)
         J_return(:,i) = Ji;
     end
 end
-
-% 저 차원에서는 밑의 코드로
-% function J_return = huber(J,huber_delta)
-%     J_return = zeros(size(J,1), size(J,2));
-%     err = zeros(size(J,2),1);
-%     for i = 1:size(J,2)
-%         err(i) = norm(J(:,i));
-%     end
-%     a = sort(err);
-%     tmp = 1./sin(a).^13;
-%     a = a(cumsum(tmp) <= sum(tmp)/2);
-%     s = a(size(a,1))/0.6745;
-%     for i = 1:size(J,2)
-%         Ji = J(:,i);
-%         if err(i) > huber_delta * s
-%             Ji = Ji/norm(Ji) * huber_delta * s;
-%         end
-%         J_return(:,i) = Ji;
-%     end
-% end

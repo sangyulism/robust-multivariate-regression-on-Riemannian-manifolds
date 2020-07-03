@@ -1,41 +1,25 @@
-function [p, V, E, Y_hat, gnorm, gradp_list] = mglm_sphere(X, Y, varargin)
-%MGLM_SPHERE performs MGLM on the unit sphere by interative method.
-%
-%   [p, V, E, Y_hat, gnorm] = MGLM_SPHERE(X, Y)
-%   [p, V, E, Y_hat, gnorm] = MGLM_SPHERE(X, Y, MAXITER)
-%   has optional parameter MAXITER.  
-%
+function [p, V, E, Y_hat, gnorm] = rmm_sphere_L1(X, Y, varargin)
 %   The result is in p, V, E, Y_hat.
 %
-%   X is dimX x N column vectors
-%   Y is dimY x N column vectors (points on the unit sphere in R^dimY).
+%   X is npivots * ndata
+%   Y is dimY x ndata column vectors (points on the unit sphere in R^dimY).
 %   p is a base point.
 %   V is a set of tangent vectors (dimY x dimX).
 %   E is the history of the sum of squared geodesic error.
 %   Y_hat is the prediction.
 %   gnorm is the history of norm of gradients.
-%
-%   See also MGLM_LOGEUC_SPHERE, EXPMAP_SPHERE, FEVAL_SPHERE, PREDICTION_SPHERE,
-%   LOGMAP_VECS_SPHERE, PARALLELTRANSLATEATOB_SPHERE
-
-%   Hyunwoo J. Kim
-%   $Revision: 0.1 $  $Date: 2014/06/23 17:27:37 $
-
     
     ndimY = size(Y,1);
     [ndimX ndata] = size(X);
-    Xc = X - repmat(mean(X,2),1,ndata); % mean(X,2) 는 각 행벡터의 평균값을 반환한 열벡터, Xc는 중앙화 시킨 값
+    Xc = X - repmat(mean(X,2),1,ndata);
     p = karcher_mean_sphere(Y, ones(ndata,1)/ndata, 500);
 
     logY = logmap_vecs_sphere(p, Y);
-    U = null(ones(size(p,1),1)*p'); % Get orthogonal bases of TpM, null(A) 는 A의 null space의 orthonormal basis 를 열벡터로 갖는 행렬
-    Yu = U'*logY; %logY is represented by U,Yu = L*X
-    L = Yu/Xc; % LXc = Yu, 이거 항상 있음?
+    U = null(ones(size(p,1),1)*p');
+    Yu = U'*logY;
+    L = Yu/Xc;
     V = U*L;
-    % %% zeros
-    % V = zeros(ndimY,ndimX); % Random initialization
-    
-    V = proj_TpM(p,V); % To get the valid tangent vectors.
+    V = proj_TpM(p,V);
     
     if nargin >=3
         maxiter = varargin{1};
@@ -52,19 +36,17 @@ function [p, V, E, Y_hat, gnorm, gradp_list] = mglm_sphere(X, Y, varargin)
 
     E = [];
     gnorm = [];
-    gradp_list = [];
     E = [E; feval_sphere(p,V,X,Y)];
     step = c1;
     for niter=1:maxiter
         Y_hat = prediction_sphere(p,V,X);
         J = logmap_vecs_sphere(Y_hat,Y);
         err_TpM = paralleltranslateAtoB_sphere(Y_hat, p, J);
-        gradp = -sum(err_TpM,2);
-        
-        % v projection on to tanget space
+        err_TpM_L1 = L1(err_TpM);
+        gradp = -sum(err_TpM_L1,2);
         gradV = zeros(size(V));
         for iV = 1:size(V,2)
-            gradV(:,iV) = -err_TpM*X(iV,:)';
+            gradV(:,iV) = -err_TpM_L1*X(iV,:)';
         end
         gnorm_new = norm([gradV gradp]);
         
@@ -85,7 +67,6 @@ function [p, V, E, Y_hat, gnorm, gradp_list] = mglm_sphere(X, Y, varargin)
                 V = V_new;
                 E = [E; E_new];
                 gnorm = [gnorm; gnorm_new];
-                gradp_list = [gradp_list; gradp];
                 moved = 1;
                 step = min(step*2,1);
                 break
@@ -120,4 +101,13 @@ function [gradp, gradV] = safeguard(gradp, gradV, c2)
     end
     
 end
-    
+
+%% L1
+function J_return = L1(J)
+    J_return = zeros(size(J,1), size(J,2));
+    for i = 1:size(J,2)
+        Ji = J(:,i);
+        Ji = Ji/norm(Ji);
+        J_return(:,i) = Ji;
+    end
+end

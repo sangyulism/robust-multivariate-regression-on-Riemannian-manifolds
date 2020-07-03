@@ -1,22 +1,21 @@
-% 이 코드는 수정되어서 같은 X를 여러개 붙인게 아니라 그냥 npair개 만큼 생성할껍니다.
+% Errors follow a Gaussian distribution, but 10% of the data is assumed to be anomalous.
 
 %% Parameters
-dimY = 15;
+dimY = 15; % for S^(dimY-1) in R^dimY
 npivots = 3;
-npairs = 100;
+ndata = 100;
 
-max_noise_size = 3.0;
+max_noise = 3.0;
 noise_size = 0.1;
-udist = 3; % udist : V의 크기를 결정하는 parameter
+max_dist_from_p = 3;
 noutliers = 10;
 mse_iter = 30;
 
-%% For figure
-X = rand(npivots,npairs);
+X = rand(npivots,ndata);
 X = center(X);
 
-%% Synthesized data
-%npivots = size(X,1); % Number of points except the base point
+%% Synthesized data for S^(dimY-1)
+% npivots = size(X,1); % Number of points except the base point
 Yp = zeros(dimY, npivots + 1);
 while true
     Yp(:,1) = unitvec(randn(dimY,1));
@@ -34,7 +33,7 @@ while true
     issafe = true;
     for i = 1:length(X)
         Vtmp = V*X(:,i);
-        if norm(Vtmp) > udist
+        if norm(Vtmp) > max_dist_from_p
             issafe = false;
             break
         end
@@ -50,10 +49,10 @@ end
 Ysample = zeros(dimY,size(Y_0,2),mse_iter);
 
 for k = 1:mse_iter
-    for i = 1:npairs
-        Ysample(:,i,k) = addnoise_sphere_normal(Y_0(:,i),noise_size,max_noise_size);
+    for i = 1:ndata
+        Ysample(:,i,k) = addnoise_sphere_normal(Y_0(:,i),noise_size,max_noise);
     end
-    for i = (npairs - noutliers+1):npairs
+    for i = (ndata - noutliers+1):ndata
         % Ysample(:,i,k) = randpoint(dimY);
         Ysample(:,i,k) = - Ysample(:,i,k); 
     end
